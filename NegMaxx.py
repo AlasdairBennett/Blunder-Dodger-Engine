@@ -221,4 +221,4 @@ class NegMaxx:
             if score > alpha:
                 alpha = score
 
-        return best_move
+        return best_move.uci()
