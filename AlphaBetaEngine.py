@@ -1,7 +1,7 @@
 import chess
 
 
-class NegMaxx:
+class AlphaBetaEngine:
     # constants needed for evaluation function
     #   piece values expressed in centipawns and piece-square tables taken from Tomasz Michniewski via
     #   https://www.chessprogramming.org/Simplified_Evaluation_Function
@@ -87,13 +87,12 @@ class NegMaxx:
     # core evaluation method to give a score to a position
     #   takes a fen of a board position (Forsyth-Edwards Notation) and returns a score for it.
     #   Based on Simplified Evaluation Function here: https://www.chessprogramming.org/Simplified_Evaluation_Function
-    #   Also borrows from https://andreasstckl.medium.com/writing-a-chess-program-in-one-day-30daff4610ec
     def evaluate(self):
 
         # Return the evaluation score for games which are completed
         if self.board.is_game_over():
             oc = self.board.outcome()
-            if oc.winner == "white":
+            if (oc.winner == "white") | (oc.winner == "black"):
                 if self.board.turn:
                     return float('inf')
                 else:
@@ -101,47 +100,41 @@ class NegMaxx:
             else:
                 return 0
 
-        # Find the number of each piece remaining for each player
-        wp = len(self.board.pieces(chess.PAWN, chess.WHITE))
-        wn = len(self.board.pieces(chess.KNIGHT, chess.WHITE))
-        wb = len(self.board.pieces(chess.BISHOP, chess.WHITE))
-        wr = len(self.board.pieces(chess.ROOK, chess.WHITE))
-        wq = len(self.board.pieces(chess.QUEEN, chess.WHITE))
-
-        bp = len(self.board.pieces(chess.PAWN, chess.BLACK))
-        bn = len(self.board.pieces(chess.KNIGHT, chess.BLACK))
-        bb = len(self.board.pieces(chess.BISHOP, chess.BLACK))
-        br = len(self.board.pieces(chess.ROOK, chess.BLACK))
-        bq = len(self.board.pieces(chess.QUEEN, chess.BLACK))
-
-        score = ((self.P * (wp - bp)) +  # Material score for pawns
-                 (self.N * (wn - bn)) +  # knights
-                 (self.B * (wb - bb)) +  # bishops
-                 (self.R * (wr - br)) +  # rooks
-                 (self.Q * (wq - bq)))  # queens
+        # Find the number of each piece remaining for each player and calculate the score using
+        #   the preset piece values
+        score = 0
+        # Pawns
+        score += self.P * (len(self.board.pieces(chess.PAWN, chess.WHITE)) -
+                           len(self.board.pieces(chess.PAWN, chess.BLACK)))
+        # Knights
+        score += self.N * (len(self.board.pieces(chess.KNIGHT, chess.WHITE)) -
+                           len(self.board.pieces(chess.KNIGHT, chess.BLACK)))
+        # Bishops
+        score += self.B * (len(self.board.pieces(chess.BISHOP, chess.WHITE)) -
+                           len(self.board.pieces(chess.BISHOP, chess.BLACK)))
+        # Rooks
+        score += self.R * (len(self.board.pieces(chess.ROOK, chess.WHITE)) -
+                           len(self.board.pieces(chess.ROOK, chess.BLACK)))
+        # Queens
+        score += self.Q * (len(self.board.pieces(chess.QUEEN, chess.WHITE)) -
+                           len(self.board.pieces(chess.QUEEN, chess.BLACK)))
 
         # add the piece-square table calculations to get a score for piece positions
-
         # pawns
         score += sum([self.PAWN_TABLE[i] for i in self.board.pieces(chess.PAWN, chess.WHITE)])
         score += sum([-self.PAWN_TABLE[chess.square_mirror(i)] for i in self.board.pieces(chess.PAWN, chess.BLACK)])
-
         # knights
         score += sum([self.KNIGHT_TABLE[i] for i in self.board.pieces(chess.KNIGHT, chess.WHITE)])
         score += sum([-self.KNIGHT_TABLE[chess.square_mirror(i)] for i in self.board.pieces(chess.KNIGHT, chess.BLACK)])
-
         # bishops
         score += sum([self.BISHOP_TABLE[i] for i in self.board.pieces(chess.BISHOP, chess.WHITE)])
         score += sum([-self.BISHOP_TABLE[chess.square_mirror(i)] for i in self.board.pieces(chess.BISHOP, chess.BLACK)])
-
         # rooks
         score += sum([self.ROOK_TABLE[i] for i in self.board.pieces(chess.ROOK, chess.WHITE)])
         score += sum([-self.ROOK_TABLE[chess.square_mirror(i)] for i in self.board.pieces(chess.ROOK, chess.BLACK)])
-
         # queens
         score += sum([self.QUEEN_TABLE[i] for i in self.board.pieces(chess.QUEEN, chess.WHITE)])
         score += sum([-self.QUEEN_TABLE[chess.square_mirror(i)] for i in self.board.pieces(chess.QUEEN, chess.BLACK)])
-
         # kings TODO implement end game table
         score += sum([self.KING_MID_TABLE[i] for i in self.board.pieces(chess.KING, chess.WHITE)])
         score += sum([-self.KING_MID_TABLE[chess.square_mirror(i)] for i in self.board.pieces(chess.KING, chess.BLACK)])
@@ -155,7 +148,7 @@ class NegMaxx:
         # the final returned score is expressed as negative for a black advantage and positive for a white advantage
         # return score
 
-    # quiescence is a helper which extends the negamax search, evaluating a position until it is "quiet"
+    # quiescence is a helper which extends the alpha-beta search, evaluating a position until it is "quiet"
     #   https://www.chessprogramming.org/Quiescence_Search
     #   TODO add delta pruning https://www.chessprogramming.org/Delta_Pruning
     def quiescence(self, alpha, beta):
@@ -178,11 +171,10 @@ class NegMaxx:
 
         return alpha
 
-    # negamax is a recursive algorithm implemented to find the best available move given a depth parameter
+    # alpha is a recursive algorithm implemented to find the best available move given a depth parameter
     #   takes a search depth, a fen representing the current game position,
-    #   also uses alphabeta pruning as a part of the function to vastly increase the performance.
-    def negamax(self, depth, alpha, beta):
-
+    #   uses alphabeta pruning to vastly increase the performance over negamax / minimax.
+    def alphabeta(self, depth, alpha, beta):
         if depth == 0:              # base case
             return self.evaluate()
             # return self.quiescence(alpha, beta)  TODO make quiescence performant enough to use
@@ -190,7 +182,7 @@ class NegMaxx:
         max_score = float('-inf')
         for move in self.board.legal_moves:
             self.board.push(move)
-            score = -self.negamax(depth - 1, beta, alpha)  # recursive call
+            score = -self.alphabeta(depth - 1, beta, alpha)  # recursive call
             self.board.pop()
 
             if score >= beta:
@@ -202,17 +194,16 @@ class NegMaxx:
 
         return max_score
 
-    # nega_wrapper is a wrapper function used to call the recursive function negamax
+    # ab_wrapper is a wrapper function used to call the recursive function alphabeta
     #   it takes no parameters and returns the best move available according to the search
-    def nega_wrapper(self):
-
+    def ab_wrapper(self):
         max_score = float('-inf')
         best_move = chess.Move.null()  # This value should never be returned
         alpha = float('-inf')  # minimum score for maximizing player
         beta = float('inf')  # maximum score for minimizing player
         for move in self.board.legal_moves:
             self.board.push(move)
-            score = -self.negamax(self.DEFAULT_SEARCH_DEPTH, -beta, -alpha)
+            score = -self.alphabeta(self.DEFAULT_SEARCH_DEPTH, -beta, -alpha)
             self.board.pop()
 
             if score > max_score:
@@ -221,4 +212,6 @@ class NegMaxx:
             if score > alpha:
                 alpha = score
 
+        print(max_score)
+        print(best_move.uci())
         return best_move.uci()
