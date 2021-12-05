@@ -212,6 +212,4 @@ class AlphaBetaEngine:
             if score > alpha:
                 alpha = score
 
-        print(max_score)
-        print(best_move.uci())
         return best_move.uci()
